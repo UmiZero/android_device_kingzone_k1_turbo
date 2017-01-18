@@ -13,14 +13,34 @@ on charger
 on init
     export LD_PRELOAD "libxlog.so"
 
+    # See storage config details at http://source.android.com/tech/storage/
+    mkdir /storage/sdcard 0555 root root
+ 
+    # Support legacy paths
+    symlink storage/sdcard /sdcard
+    symlink storage/sdcard /mnt/sdcard
+
     # By default, primary storage is physical
-    setprop ro.vold.primary_physical 1
+	
+    mkdir /protect_f 0771 system system
+    mkdir /protect_s 0771 system system
 
-    symlink /sdcard /mnt/sdcard
-    symlink /sdcard /storage/sdcard0
-
+    # Change ION driver permission
     chown system graphics /dev/ion
     chmod 0644 /dev/ion
+	
+    # change lk_env permission
+    chown root system /proc/lk_env
+    chmod 0660 /proc/lk_env
+	
+    # mount different fs start
+
+on fs
+    write /proc/bootprof "INIT:eMMC:Mount_All_START"
+    mount_all /fstab.mt6592
+    write /proc/bootprof "INIT:eMMC:Mount_All_END"
+
+    # mount different fs end
 
     # TODO: fix system apps run with unknown user resume 0660
     chmod 0666 /dev/mali
@@ -40,6 +60,11 @@ on init
 
     chown system media /dev/MJC
     chmod 0660 /dev/MJC
+
+    chown media media /dev/ccci_pcm_rx
+    chmod 0660 /dev/ccci_pcm_rx
+    chown media media /dev/ccci_pcm_tx
+    chmod 0660 /dev/ccci_pcm_tx
 
     chown bluetooth radio /dev/ttyGS2
     chmod 0660 /dev/ttyGS2
@@ -93,13 +118,12 @@ on init
 
     # Camera
     chmod 0660 /dev/camera-sysram
-    chmod 0664 /dev/camera-isp
+    chmod 0660 /dev/camera-isp
     chmod 0660 /dev/camera-pipemgr
     chmod 0660 /dev/kd_camera_hw
     chmod 0660 /dev/kd_camera_flashlight
     chmod 0660 /dev/kd_camera_hw_bus2
     chmod 0660 /dev/FM50AF
-    chmod 0660 /dev/DW9714AF
     chmod 0660 /dev/DW9718AF
     chmod 0660 /dev/OV8825AF
     chmod 0660 /dev/CAM_CAL_DRV
@@ -111,7 +135,6 @@ on init
     chown system camera /dev/kd_camera_flashlight
     chown system camera /dev/kd_camera_hw_bus2
     chown system camera /dev/FM50AF
-    chown system camera /dev/DW9714AF
     chown system camera /dev/DW9718AF
     chown system camera /dev/OV8825AF
     chown system camera /dev/CAM_CAL_DRV
@@ -122,18 +145,12 @@ on init
     chown root radio /dev/mt_otg_test
     chmod 0660 /dev/mt_otg_test
 
-    chown system camera /dev/MTK_SMI
+    chown system media /dev/MTK_SMI
     chmod 0660 /dev/MTK_SMI
-    chown system camera /sys/bus/platform/drivers/mem_bw_ctrl/concurrency_scenario
-    chmod 0660 /sys/bus/platform/drivers/mem_bw_ctrl/concurrency_scenario
-
     chown system media /dev/mtk_sched
     chmod 0660 /dev/mtk_sched
     chown system media /dev/ebc
     chmod 0660 /dev/ebc
-
-    chown system media /proc/M4U_device
-    chmod 0666 /proc/M4U_device
 
     # Sensor
     chmod 0666 /dev/hwmsensor
@@ -319,10 +336,7 @@ on post-fs
     chmod 0660 /dev/wmtdetect
     chown system system /dev/wmtdetect
 
-    mkdir /data/nvram 0770 media system
-    mkdir /data/nvram/APCFG 0770 media system
-    mkdir /data/nvram/APCFG/APRDCL 0770 media system
-    mkdir /data/nvram/APCFG/APRDEB 0770 media system
+    mkdir /data/nvram 2770 root system
     chmod 0770 /dev/nvram
 
     chown radio radio /sys/kernel/ccci/boot
@@ -332,26 +346,16 @@ on post-fs
     chmod 0444 /system/etc/ril/oper.lis
     setprop rild.nw.operlist /system/etc/ril/oper.lis
 
-service wmtLoader /system/bin/wmt_loader
+service wmtLoader /system/bin/logwrapper /system/bin/wmt_loader
     user root
     group root
     class main
     oneshot
 
-service conn_launcher /system/bin/6620_launcher -p /system/etc/firmware/
+service conn_launcher /system/bin/logwrapper /system/bin/6620_launcher -p /system/etc/firmware/
     user system
     group system
     class core
-
-on fs
-    write /proc/bootprof "INIT:eMMC:Mount_START"
-
-    mkdir /protect_f 0771 system system
-    mkdir /protect_s 0771 system system
-
-    mount_all /fstab.mt6592
-
-    write /proc/bootprof "INIT:NAND:Mount_END"
 
 on property:wlan.driver.status=ok
 	write /dev/wmtWifi "1"
@@ -437,6 +441,20 @@ service thermald /system/bin/thermald
     user system
     group system
 
+service mdlogger /system/bin/mdlogger
+    class main
+    user root
+    group shell system radio sdcard_rw inet sdcard_r media_rw ccci
+    disabled
+    oneshot
+
+service dualmdlogger /system/bin/dualmdlogger
+    class main
+    user shell
+    group shell system radio sdcard_rw inet sdcard_r media_rw ccci
+    disabled
+    oneshot
+
 service emcsmdlogger /system/bin/emcsmdlogger
     class main
     user shell
@@ -471,7 +489,7 @@ service memsicd /system/bin/memsicd
     class main
 
 service memsicd3416x /system/bin/memsicd3416x
-     disabled
+    disabled
     user system
     group system
     class main
@@ -524,13 +542,25 @@ service orientationd /system/bin/orientationd
     group system input
     class main
 
+service AcdApiDaemon /system/bin/AcdApiDaemon
+    disabled
+    user system
+    group system
+    class main
+
 service geomagneticd /system/bin/geomagneticd
     disabled
     user system
     group system input
     class main
-
-
+    
+service mc64xxd /system/bin/mc64xxd
+    disabled
+    user system
+    group system
+    class main
+    
+        
 #
 #sensor service (end)
 #
@@ -571,7 +601,6 @@ service ipod /system/bin/ipod
     user root
     group root
     class ipo
-    disabled
 
 # CM Performance Profiles
 
