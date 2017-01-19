@@ -135,6 +135,10 @@ PRODUCT_PACKAGES += \
     libfmcust \
     libmtkplayer
 
+# Gello
+PRODUCT_PACKAGES += \
+    Gello
+
 # Smart Cover
 PRODUCT_PACKAGES += \
     SmartCover
