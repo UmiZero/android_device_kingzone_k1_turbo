@@ -119,6 +119,10 @@ PRODUCT_COPY_FILES += \
 # USB
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
     persist.sys.usb.config=mtp
+    
+# Data
+PRODUCT_DEFAULT_PROPERTY_OVERRIDES += \
+    ro.com.android.dataroaming=true
 
 # NFC
 PRODUCT_PACKAGES += \
